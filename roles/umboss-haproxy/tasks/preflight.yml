@@ -1,0 +1,30 @@
+---
+- name: Check OS
+  ansible.builtin.assert:
+    that: "ansible_os_family == 'RedHat'"
+    success_msg: "RedHat OS family found."
+
+- name: Gather the package facts
+  ansible.builtin.package_facts:
+    manager: rpm
+
+# Check if haproxy is installed
+- name: Check that haproxy is installed
+  ansible.builtin.assert:
+    that:
+      - "'haproxy' in ansible_facts.packages.keys()"
+    fail_msg: "HAProxy not installed"
+    success_msg: "HAProxy installed."
+
+- name: Check that haproxy config directory exists
+  stat:
+    path: "/etc/haproxy"
+  register: haproxy_conf_dir_check
+
+- name: Assert haproxy config directory exists
+  ansible.builtin.assert:
+    that:
+      - "haproxy_conf_dir_check is defined"
+    fail_msg: "HAProxy configuration directory /etc/haproxy does not exist."
+    success_msg: "HAProxy configuration directory /etc/haproxy found."
+

@@ -1,0 +1,13 @@
+---
+
+- name: Apply UMBOSS HA haproxy config
+  hosts: haproxy
+  gather_facts: yes
+  pre_tasks:
+    - setup:
+        gather_subset:
+          - '!all'
+  roles:
+    - umboss-haproxy
+  tags:
+    - umboss-haproxy

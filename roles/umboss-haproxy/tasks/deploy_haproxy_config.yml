@@ -1,0 +1,61 @@
+---
+# Deployment of UMBOSS HA haproxy confguration.
+# Additional HA LB points are introduced as dropin config files in /etc/haproxy.d directory
+
+- name: Create /etc/haproxy/haproxy.d configuration directory
+  file:
+    path: /etc/haproxy/haproxy.d
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+
+# TODO: Make this future-proof, extract default config filename from systemd unit file 
+# /etc/systemd/system/haproxy.service
+# EnvironmentFile=/etc/sysconfig/haproxy-2.3.2
+# haproxy global config file includes version. To have future-proof playbook we have to extract
+# global config filename from systemd unit file
+- name: Slurp haproxy.service file
+  slurp:
+    src: "/etc/systemd/system/haproxy.service"
+  register: haproxy_unit
+
+- debug:
+    msg: "haproxy.service unit file:\n{{ haproxy_unit.content | b64decode }}"
+
+- name: Extract haproxy global config filename from systemd unit file 
+  set_fact:
+    #haproxy_sysconfig: "{{ haproxy_unit | b64decode | split('\\n') | regex_replace('^EnvironmentFile=(.+)$', '\\1') }}"
+    haproxy_sysconfig: "{{ haproxy_unit.content | b64decode | regex_search('EnvironmentFile=(.+)\\n', '\\1') }}"
+
+- name: Confirm we got proper haproxy sysconfig file path
+  ansible.builtin.assert:
+    that:
+      - "haproxy_sysconfig is defined"
+      # Check that we actualy have a value for the haproxy_sysconfig fact. regex_search returns '' if nothing is found. 
+      - "haproxy_sysconfig | length > 0"
+    fail_msg: "HAProxy sysconfig file path was not extracted from unit file!"
+    success_msg: "HAProxy global config file: {{ haproxy_sysconfig }}."
+
+- name: Configure additional config directory for haproxy
+  lineinfile:
+    insertafter: EOF
+    backrefs: yes
+    regexp: '^CLI_OPTIONS="?([^"]*)(?!-f /etc/haproxy/haproxy.d)([^"]*)"?$'
+    path: "/etc/sysconfig/haproxy-2.3.2"
+    state: present
+    line: 'CLI_OPTIONS="\1 -f /etc/haproxy/haproxy.d\2"'
+  notify: reload haproxy
+
+# Deploy individual haporxy LB configurations
+- name: Copy Virtual Server config file
+  template:
+    src: "{{ item }}.conf"
+    dest:  "/etc/haproxy/haproxy.d/{{ item }}.conf"
+    owner: root
+    group: root
+    mode: 0644
+  loop:
+    - lb_fmnbi
+  notify: reload haproxy
+

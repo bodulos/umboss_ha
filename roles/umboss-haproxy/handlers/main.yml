@@ -1,0 +1,12 @@
+---
+# handlers file for umboss-haproxy
+- name: restart haproxy
+  systemd:
+    daemon_reload: true
+    name: haproxy
+    state: restarted
+
+- name: reload haproxy
+  systemd:
+    name: haproxy
+    state: reloaded

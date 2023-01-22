@@ -1,0 +1,10 @@
+---
+# tasks file for umboss-haproxy
+
+- include: preflight.yml
+  tags:
+    - deploy-haproxy-config
+
+- include: deploy_haproxy_config.yml
+  tags:
+    - deploy-haproxy-config
