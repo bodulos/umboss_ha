@@ -1,0 +1,29 @@
+---
+
+# Disable all existing fms processes installed by regular procedure
+# This is for PoC only, proper integration in standard procedure should be done for production
+
+- name: Populate service facts
+  ansible.builtin.service_facts:
+
+- name: Print service facts
+  ansible.builtin.debug:
+    var: ansible_facts.services
+
+# - name: Print service facts
+#   ansible.builtin.debug:
+#     var: ansible_facts.services.keys() | select('match', '^fms-.+$') | list
+
+- debug:
+    msg: "{{ item }}"
+  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-') | list }}"
+
+- name: Disable non-HA FMS services
+  systemd:
+      name: "{{ item }}"
+      state: stopped
+      enabled: no
+      masked: yes
+  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-') | list }}"
+
+

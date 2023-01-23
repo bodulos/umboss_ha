@@ -11,3 +11,10 @@
     - umboss-haproxy
   tags:
     - umboss-haproxy
+
+- name: Deploy FMS processes in HA mode
+  hosts: fms
+  roles:
+    - umboss-fms-ha
+  tags:
+    - umboss-fms-ha
