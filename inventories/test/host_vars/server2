@@ -1,24 +1,6 @@
-hostname: "inchasite01"
-ansible_host: 192.168.50.191
+hostname: "inchasite02"
+ansible_host: 192.168.50.192
 
-
-# automations-engine
-# availability-engine
-# correlation-engine
-# enrich-processor
-# event-clearing
-# event-processor_FLUME@SRC1_SYSLOG1
-# event-processor_FLUME@SRC2_SNMPTT1
-# event-processor_FLUME@SRC3_NAGIOS1
-# event-processor_FLUME@SRC4_GENERIC1
-# notification-engine
-# reporter-gw
-# sanity-check
-# script-launcher
-# stats-collector
-# suppression-engine
-# ticket-handler
-# api-processor
 fms_services_config:
   # Common env variables
   env:

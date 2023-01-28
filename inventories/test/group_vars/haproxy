@@ -1,0 +1,13 @@
+
+# FM NBI balancer config
+lb_fmnbi_vip: 192.168.50.193
+lb_fmnbi_port: 20000
+lb_fmnbi_backend_1: 192.168.50.191:8080
+lb_fmnbi_backend_2: 192.168.50.192:8080
+
+# PM NBI balancer config
+lb_pmnbi_vip: 192.168.50.193
+lb_pmnbi_port: 20001
+lb_pmnbi_backend_1: 192.168.50.191:8081
+lb_pmnbi_backend_2: 192.168.50.192:8081
+

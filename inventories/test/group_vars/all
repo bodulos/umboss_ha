@@ -1,1 +1,4 @@
 environment_type: "test"
+ha_wrapper_path: "/usr/local/bin/ha-wrapper.sh"
+fms_correlation_engine_dir_path: "/opt/umboss/fms"
+fms_enrich_processor_dir_path: "/opt/umboss/fms"
