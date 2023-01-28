@@ -1,0 +1,18 @@
+[Unit]
+Description=Python daemon fms-ha-%i
+After=syslog.target
+After=network.target
+
+[Service]
+Type=forking
+User=umboss
+EnvironmentFile=/etc/systemd/system/fms-ha-%i.env
+ExecStart={{ ha_wrapper_path }}
+Restart=always
+RestartSec=5
+
+# Give the script some time to startup
+TimeoutSec=10
+
+[Install]
+WantedBy=multi-user.target

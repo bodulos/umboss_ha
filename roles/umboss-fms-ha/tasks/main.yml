@@ -4,3 +4,7 @@
 - include: preflight.yml
   tags:
     - deploy-fms-ha
+
+- include: deploy_fms_ha.yml
+  tags:
+    - deploy-fms-ha

@@ -1,0 +1,46 @@
+---
+
+- name: Check systemd version 
+  shell:
+    cmd: systemctl --version | awk '/systemd\s+[0-9]+/{ print $2 }'
+  changed_when: false
+  check_mode: false
+  register: systemd_version
+
+- name: Install ha-wrapper script
+  template:
+    src: ha-wrapper.sh
+    dest: /usr/local/bin/ha-wrapper.sh
+    mode: 0744
+    owner: umboss
+    group: umboss
+
+- name: Create fms unit instances env files
+  template:
+    src: fms-ha-env.j2
+    dest: "/etc/systemd/system/fms-ha-{{ item.name }}.env"
+    mode: 0644
+    owner: root
+    group: root
+  loop: "{{ fms_services_config.services }}"
+
+- name: Deploy fms-ha unit file
+  template:
+    src: "fms-ha@.service.j2"
+    dest: "/etc/systemd/system/fms-ha@.service"
+    mode: 0644
+    owner: root
+    group: root
+  register: fms_ha_unit_file
+
+- name: systemd_reload
+  systemd:
+    daemon_reload: true
+  when: fms_ha_unit_file.changed
+
+# - name: Start fms-ha services
+#   systemd:
+#     name: "fms-ha@{{ item.name }}.service"
+#     state: restarted    
+#   loop: "{{ fms_services_config.services }}"
+#   #order: shuffle

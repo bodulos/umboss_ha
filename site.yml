@@ -14,7 +14,9 @@
 
 - name: Deploy FMS processes in HA mode
   hosts: fms
+  serial: 100%
   roles:
     - umboss-fms-ha
   tags:
     - umboss-fms-ha
+  #order: shuffle

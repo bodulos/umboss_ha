@@ -1,0 +1,6 @@
+{% for var, value in fms_services_config.env.items() %}
+{{ var }}="{{ value }}"
+{% endfor %}
+{% for var, value in item.env.items() %}
+{{ var }}="{{ value }}"
+{% endfor %}

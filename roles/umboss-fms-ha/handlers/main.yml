@@ -1,2 +1,5 @@
 ---
 # handlers file for umboss-fms
+- name: systemd_reload
+  systemd:
+    daemon_reload: true
