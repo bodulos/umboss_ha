@@ -1,18 +1,40 @@
 #!/bin/bash
 
-#[ -f ./ha-wrapper.env ] && source ./ha.wrapper.env
-
-[ -z ${LEADER_KEY} ] && LEADER_KEY="programX_leader"
-[ -z ${LEADER_VALUE} ] && LEADER_VALUE="server1"
-#LEADER_VALUE="${HOSTNAME}"
-OBSERVER_TIMEOUT=10
-
-controller_pid="$$"
+#[ -f ./ha-wrapper.env ] && source ./ha-wrapper.env
 
 # log $msg
 function log() {
 	echo "$1"
 }
+
+# Main input variables sanity check. If not set use some reasonable defaults.
+#
+if [ -z ${LEADER_KEY} ] ; then
+	log "Leader election key not specified. Unique etcd key name is mandatory input value."
+	exit 1
+fi
+
+ 
+[ -z ${LEADER_VALUE} ] && LEADER_VALUE="${HOSTNAME}"
+[ -z ${LEADER_VALUE} ] && LEADER_VALUE="$(hostname)"
+if [ -z ${LEADER_VALUE} ] ; then
+	log "Value for the Leader election key in etcd must be specified."
+	exit 1
+fi
+
+if [ -z "${APP}" ] ; then
+	log "Application not specified"
+	exit 1
+fi
+
+log "LEADER_KEY: ${LEADER_KEY}"
+log "LEADER_VALUE: ${LEADER_VALUE}"
+log "APP: ${APP}"
+log "STARTED_BY_SYSTEMD: ${STARTED_BY_SYSTEMD}"
+
+OBSERVER_TIMEOUT=15
+
+controller_pid="$$"
 
 # killpid $pid $cmdline_regex
 function killpid()
@@ -43,12 +65,21 @@ function cleanup() {
 	# DONE ->
 	# Parent PID check can be missleading, when parent is killed, PID 1 takes role of the parent. We will skip this check.
 	
-	echo "Cleanup: elector process."
-	killpid ${elector_pid} "etcdctl elect ${LEADER_KEY} ${LEADER_VALUE}"
-	echo "Cleanup: observer process."
-	killpid ${observer_pid} "etcdctl elect -l ${LEADER_KEY}"
-	echo "Cleanup: application process."
-	killpid ${app_pid} "${APP}"
+	# if PID variable is set and process with that PID exist, kill it
+	if [ ! -z ${elector_pid} ] ; then
+		log "Cleanup: elector process."
+		kill -0 ${elector_pid} 2>/dev/null && killpid ${elector_pid} "etcdctl elect ${LEADER_KEY} ${LEADER_VALUE}"
+	fi
+
+	if [ ! -z "${observer_pid}" ] ; then
+		log "Cleanup: observer process."
+		kill -0 ${observer_pid} 2>/dev/null && killpid ${observer_pid} "etcdctl elect -l ${LEADER_KEY}"
+	fi
+
+	if [ ! -z "${app_pid}" ] ; then
+		log "Cleanup: application process."
+		kill -0 ${app_pid} 2>/dev/null && killpid ${app_pid} "${APP}"
+	fi
 
     # Fifo is a pipe so -f test does not work. -e (is a file) or -p (is a pipe) will work.
 	[ -e ${observer_fifo} ] && ( log "Cleanup: removing observer fifo ${observer_fifo}" ; rm -f ${observer_fifo} )
@@ -67,9 +98,7 @@ trap cleanup SIGHUP SIGINT SIGQUIT SIGTERM EXIT
 log "Cleanup trap is setup"
 
 # Wait for us to get elected as a leader.
-# While election process is alive:
-while kill -0 ${elector_pid} 2> /dev/null; do
-	
+if kill -0 ${elector_pid} 2> /dev/null ; then
 	log "Leader election process is alive, let's wait our turn..." 
 	# Wait for us to get elected as leader.
 	# We basicaly need to check if we are elected by parsing the output of elect observation command 
@@ -81,32 +110,50 @@ while kill -0 ${elector_pid} 2> /dev/null; do
 	# Our trap will catch this exit and kill the spawned election process.
 	mkfifo "${observer_fifo}" || exit 1
 	log "Leader election observer FIFO created"
-	etcdctl elect -l ${LEADER_KEY} >${observer_fifo} &
-	observer_pid=$!
-	log "Leader election observer started [${observer_pid}]"
-	# THIS GREP BLOCKS! Have to decuple this, with eg. timeout, to be able to check if leader election process is still alive (while loop condition)
-    # and we can continue to observe election process 
-	grep -m 1 "${LEADER_VALUE}" "${observer_fifo}"
-	if [ "$?" -ne "0" ] ; then
-		log "Leader election observer process exited without us getting elected. Something went wrong with election proces, bailing out..."
-        # Election observer process exited, unset observer_pid variable so it does not get killed in cleanup trap.
-        observer_pid=
-		exit 2
-	fi
-    log "We are elected (${LEADER_KEY})"
-	# We are elected! We can close the observer now.
-    log "Killing Observer PID ${observer_pid}"
-	kill "${observer_pid}"
-	# Election observer process is killed, unset observer_pid variable so it does not get killed in cleanup trap.
-	observer_pid=
-	# Delete fifo. It would be done by trap also, as failsafe.
-    log "Removing Observer FIFO: ${observer_fifo}"
-	rm -f "${observer_fifo}"
 
-    log "Break the Leader election loop."
-    break
 
-done
+	# While election process is alive:
+	while kill -0 ${elector_pid} 2> /dev/null; do
+		
+		jobs 2>&1 >/dev/null
+		etcdctl elect -l ${LEADER_KEY} >${observer_fifo} &
+		observer_pid=$!
+		log "Leader election observer started [${observer_pid}]"
+
+		# THIS GREP BLOCKS! Have to decuple this, with eg. timeout, to be able to check if leader election process is still alive (while loop condition)
+		# and we can continue to observe election process 
+		timeout --kill-after 5 ${OBSERVER_TIMEOUT} grep -m 1 "${LEADER_VALUE}" "${observer_fifo}"
+		ret="$?"
+		# Command timeouted. We have to reset the loop and continue to 
+		if [ "${ret}" -eq "124" ] ; then
+			log "Observer was not awarded with leader token. Let's wait another cycle."
+			log "Killing current observer(${observer_pid})"
+			kill -0 ${observer_pid} 2> /dev/null && kill "${observer_pid}"
+			continue
+		elif [ "${ret}" -ne "0" ] ; then
+			log "Leader election observer process exited without us getting elected. Something went wrong with election proces, bailing out..."
+			# Election observer process exited, unset observer_pid variable so it does not get killed in cleanup trap.
+			observer_pid=
+			exit 1
+		fi
+		log "We are elected (${LEADER_KEY})"
+		# We are elected! We can close the observer now.
+		log "Killing Observer PID ${observer_pid}"
+		kill -0 ${observer_pid} 2> /dev/null && kill "${observer_pid}"
+		# Election observer process is killed, unset observer_pid variable so it does not get killed in cleanup trap.
+		observer_pid=
+		# Delete fifo. It would be done by trap also, as failsafe.
+		log "Removing Observer FIFO: ${observer_fifo}"
+		rm -f "${observer_fifo}"
+
+		log "Break the Leader election loop."
+		break
+
+	done
+else
+	log "Leader election process disapeared?! Something went wrong with election process, bailing out..."
+	exit 1
+fi
 
 # We are elected, we can start the application process
 # TODO: SIGKILL to a process will terminate it unconditionaly. So we have to add some additional failsafe
@@ -115,23 +162,30 @@ done
 # We actually do not need to do anything. Systemd will cleanup all the child processes when Controller process exits
 #
 
-#APP="./test.sh"
 log "Starting the app: ${APP}"
 ${APP} &
 app_pid=$!
-
+jobs
 # Start a loop that runs until we are a leader.
 log "Starting the Leader health monitoring loop."
 while kill -0 ${elector_pid} 2> /dev/null; do
-    sleep 1
+	#sleep 1
+	#jobs
+	if kill -0 ${app_pid} 2>/dev/null; then 
+    	sleep 1
+	else
+		log "Application PID (${app_pid}) is no more. Application \"${APP}\" is gone."
+		log "Breaking the Leader health monitoring loop."
+		break
+	fi
 done
 
-log "Leader elecion process is gone. We are not a leader any more. Application should be terminated."
+log "Leader election process is gone or application ended. We are not a leader any more. Application should be terminated if still running."
 
-# We are no longer a leader. Application needs to be terminated
-kill ${app_pid}
-log "Application killed: ${app_pid}"
-# If everything went well, leader process sohuld also be dead at this point. 
+# We are no longer a leader or app's gone. Cleanup and exit.
+cleanup
+
+# If everything went well, leader process should also be dead at this point. 
 # This has to be doublechecked, what happens if process is not killed but network connection is disruppted?
 # Does leader election etcdctl process die? What happens when network connection is reestablished.
 

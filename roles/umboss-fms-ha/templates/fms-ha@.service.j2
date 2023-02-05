@@ -4,8 +4,9 @@ After=syslog.target
 After=network.target
 
 [Service]
-Type=forking
+Type=exec
 User=umboss
+Environment="STARTED_BY_SYSTEMD=yes"
 EnvironmentFile=/etc/systemd/system/fms-ha-%i.env
 ExecStart={{ ha_wrapper_path }}
 Restart=always
