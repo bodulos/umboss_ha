@@ -11,9 +11,9 @@
   template:
     src: ha-wrapper.sh
     dest: /usr/local/bin/ha-wrapper.sh
-    mode: 0744
-    owner: umboss
-    group: umboss
+    mode: 0755
+    owner: root
+    group: root
 
 - name: Create fms unit instances env files
   template:
