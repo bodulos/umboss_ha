@@ -16,7 +16,7 @@
 
 - debug:
     msg: "{{ item }}"
-  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-') | list }}"
+  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-(?!ha@)') | list }}"
 
 - name: Disable non-HA FMS services
   systemd:
@@ -24,6 +24,6 @@
       state: stopped
       enabled: no
       masked: yes
-  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-') | list }}"
+  loop: "{{ ansible_facts.services.keys() | select('match', '^fms-(?!ha@)') | list }}"
 
 
