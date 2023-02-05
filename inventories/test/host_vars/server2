@@ -7,12 +7,15 @@ fms_services_config:
     FMS_KEY: "{{ encrypt_secrets_key }}"
     ETCDCTL_API: 3
     ETCDCTL_ENDPOINTS: "{% for host in groups['etcd'] %}{{ hostvars[host]['ansible_host'] }}:{{ etcd_client_port}}{% if not loop.last %},{% endif %}{% endfor %}"
+    #LEADER_VALUE: "{{ hostname }}"
   services:
     - name: correlation-engine
       service: fms-ha@.service
       env:
+        LEADER_KEY: fms-correlation-engine
         APP: "/usr/bin/python3.6 {{ fms_correlation_engine_dir_path }}/fms_correlation_engine.py --config {{ fms_correlation_engine_dir_path }}/config/fms_correlation_engine_config.xml"
     - name: enrich-processor
       service: fms-ha@.service
       env:
-        APP: "/usr/bin/python3.6 {{ fms_enrich_processor_dir_path }}/fms_enrich_processor.py --config {{ fms_enrich_processor_dir_path }}/config/fms_enrich_processor_config.xml"
+        LEADER_KEY: fms-enrich-processor
+        APP: "/usr/bin/python3.6 {{ fms_enrich_processor_dir_path }}/fms_enrich_processor.py --config {{ fms_enrich_processor_dir_path }}/config/fms_enrich_processor_config.xml -f"
